@@ -6,7 +6,7 @@ use crate::{
         runtime::{BrowserTabInfo, CookieInfo},
     },
     error::AppError,
-    infra::{logging, proxy},
+    infra::{automation::util::quiet_command, logging, proxy},
 };
 use chrono::Utc;
 use command_group::CommandGroup;
@@ -131,7 +131,7 @@ pub fn start_profile(state: &AppState, profile_id: String) -> Result<BrowserProf
     fs::create_dir_all(&user_data_dir).map_err(AppError::from)?;
 
     let debug_port = allocate_debug_port()?;
-    let mut command = Command::new(browser_binary);
+    let mut command = quiet_command(browser_binary);
     command.arg(format!(
         "--user-data-dir={}",
         user_data_dir.to_string_lossy()

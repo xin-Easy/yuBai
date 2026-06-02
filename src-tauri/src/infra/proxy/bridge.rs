@@ -2,6 +2,7 @@ use crate::{
     domain::{config::Config, browser::BrowserProxy, paths::resolve_app_path},
     error::AppError,
     infra::{
+        automation::util::quiet_command,
         logging,
         proxy::{extension, mihomo, parser},
     },
@@ -13,7 +14,7 @@ use std::{
     fs::{self, File},
     net::TcpStream,
     path::PathBuf,
-    process::{Command, Stdio},
+    process::Stdio,
     thread,
     time::{Duration, Instant},
 };
@@ -101,7 +102,7 @@ impl ProxyBridgeManager {
         let binary = mihomo::ensure_binary(&self.app_root, config)?;
         let config_path = mihomo::write_runtime_config(&workdir, port, proxy_yaml)?;
 
-        let mut command = Command::new(binary);
+        let mut command = quiet_command(binary);
         command.arg("-f").arg(&config_path);
         command.current_dir(&workdir);
         command.stdin(Stdio::null());

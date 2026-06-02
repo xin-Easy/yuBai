@@ -4,7 +4,7 @@ use crate::{
         browser::{BrowserCoreDownloadProgress, BrowserCoreValidateResult},
         config::Config,
     },
-    infra::download_source,
+    infra::{automation::util::quiet_command, download_source},
 };
 use serde::Deserialize;
 use std::{
@@ -12,7 +12,6 @@ use std::{
     env,
     fs,
     path::{Path, PathBuf},
-    process::Command,
 };
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
@@ -157,7 +156,7 @@ pub fn chrome_version_from_executable(path: &Path) -> Option<String> {
     {
         let escaped = path.display().to_string().replace('\'', "''");
         let script = format!("(Get-Item '{escaped}').VersionInfo.ProductVersion");
-        let output = Command::new("powershell")
+        let output = quiet_command("powershell")
             .args(["-NoProfile", "-Command", &script])
             .output()
             .ok()?;
@@ -167,7 +166,7 @@ pub fn chrome_version_from_executable(path: &Path) -> Option<String> {
         }
     }
 
-    let output = Command::new(path).arg("--version").output().ok()?;
+    let output = quiet_command(path).arg("--version").output().ok()?;
     let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if raw.is_empty() {
         return None;

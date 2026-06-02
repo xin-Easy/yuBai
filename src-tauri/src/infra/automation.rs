@@ -1,5 +1,5 @@
 mod types;
-mod util;
+pub mod util;
 mod runtime;
 mod settings;
 mod script;

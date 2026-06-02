@@ -2,7 +2,7 @@ use crate::{
     app::state::AppState,
     domain::config::Config,
     error::AppError,
-    infra::download_source,
+    infra::{automation::util::quiet_command, download_source},
 };
 use chrono::Utc;
 use reqwest::blocking::Client;
@@ -89,7 +89,7 @@ pub fn runtime_version_label(config: &Config) -> String {
 }
 
 pub fn detect_playwright_version(node: &Path, runtime_dir: &Path) -> Result<String, AppError> {
-    let mut command = Command::new(node);
+    let mut command = quiet_command(node);
     command
         .args([
             "-e",
@@ -101,7 +101,7 @@ pub fn detect_playwright_version(node: &Path, runtime_dir: &Path) -> Result<Stri
 }
 
 pub fn detect_typescript_version(node: &Path, runtime_dir: &Path) -> Result<String, AppError> {
-    let mut command = Command::new(node);
+    let mut command = quiet_command(node);
     command
         .args([
             "-e",
@@ -162,14 +162,14 @@ fn npm_install_command(node_paths: &NodePackage, config: &Config) -> Command {
         .and_then(|name| name.to_str())
         == Some("npm-cli.js")
     {
-        let mut command = Command::new(&node_paths.executable_path);
+        let mut command = quiet_command(&node_paths.executable_path);
         command.arg(&node_paths.npm_path);
         command.arg("install");
         command.arg("--omit=dev");
         append_npm_registry(&mut command, config);
         command
     } else {
-        let mut command = Command::new(&node_paths.npm_path);
+        let mut command = quiet_command(&node_paths.npm_path);
         command.arg("install");
         command.arg("--omit=dev");
         append_npm_registry(&mut command, config);

@@ -66,7 +66,7 @@ pub fn self_check(state: &AppState) -> Result<AutomationSelfCheck, AppError> {
     };
 
     let node_version = command_stdout(
-        std::process::Command::new(&node_paths.executable_path).arg("--version"),
+        quiet_command(&node_paths.executable_path).arg("--version"),
     )?;
     let playwright_version =
         runtime::detect_playwright_version(&node_paths.executable_path, &paths.runtime).unwrap_or_default();

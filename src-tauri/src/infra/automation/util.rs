@@ -6,6 +6,18 @@ use std::{
     process::Command,
 };
 
+/// Create a `Command` that suppresses the console window on Windows.
+/// On non-Windows platforms this is equivalent to `Command::new`.
+pub fn quiet_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    let mut cmd = Command::new(program);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    cmd
+}
+
 pub fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T, AppError> {
     let raw = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&raw)?)

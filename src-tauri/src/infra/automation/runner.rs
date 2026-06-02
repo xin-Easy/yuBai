@@ -2,7 +2,7 @@ use crate::{
     app::state::AppState,
     domain::browser::BrowserProfile,
     error::AppError,
-    infra::browser::runtime as browser_runtime,
+    infra::{automation::util::quiet_command, browser::runtime as browser_runtime},
 };
 use chrono::Utc;
 use serde_json::{json, Value};
@@ -10,7 +10,7 @@ use std::{
     fs,
     io::{BufRead, BufReader, Read, Write},
     path::Path,
-    process::{Child, Command, Stdio},
+    process::{Child, Stdio},
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -377,7 +377,7 @@ fn run_node_runner(
     input: &Value,
     timeout_ms: u64,
 ) -> Result<RunnerResult, AppError> {
-    let mut command = Command::new(node);
+    let mut command = quiet_command(node);
     command
         .arg(&paths.runner)
         .current_dir(&paths.runtime)
