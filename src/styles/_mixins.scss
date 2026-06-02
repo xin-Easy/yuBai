@@ -1,0 +1,70 @@
+$breakpoint-wide-compact: 1320px;
+$breakpoint-logs-stack: 1280px;
+$breakpoint-compact: 1180px;
+$breakpoint-two-column-stack: 1100px;
+$breakpoint-grid-compact: 1080px;
+$breakpoint-topbar-stack: 960px;
+$breakpoint-mobile: 760px;
+
+@mixin respond-down($breakpoint) {
+  @media (max-width: $breakpoint) {
+    @content;
+  }
+}
+
+@mixin wide-compact {
+  @include respond-down($breakpoint-wide-compact) {
+    @content;
+  }
+}
+
+@mixin compact-window {
+  @include respond-down($breakpoint-compact) {
+    @content;
+  }
+}
+
+@mixin two-column-stack {
+  @include respond-down($breakpoint-two-column-stack) {
+    @content;
+  }
+}
+
+@mixin grid-compact {
+  @include respond-down($breakpoint-grid-compact) {
+    @content;
+  }
+}
+
+@mixin mobile {
+  @include respond-down($breakpoint-mobile) {
+    @content;
+  }
+}
+
+@mixin glass-panel($background: var(--surface), $shadow: var(--shadow-subtle), $blur: 18px) {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: $background;
+  box-shadow: $shadow;
+  backdrop-filter: blur($blur);
+}
+
+@mixin top-light-line {
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    position: absolute;
+    inset: 0 0 auto;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent);
+    content: "";
+  }
+}
+
+@mixin table-density($cell-padding: 9px 0) {
+  .el-table .el-table__cell {
+    padding: $cell-padding;
+  }
+}

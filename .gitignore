@@ -1,0 +1,65 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+target/
+*.tsbuildinfo
+
+# Local binaries
+bin/
+
+# Local project docs
+docs/
+
+# Local RTK filters
+.rtk/filters.toml
+
+# Local database migration drafts
+src-tauri/migrations/**/*.sql
+
+# IDE / Editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Tauri specific
+src-tauri/gen/
+src-tauri/target/
+
+# Temp / Cache
+.cache/
+.temp/
+*.tmp
+*.bak
+
+# Python (icon generation temp)
+__pycache__/
+*.py[cod]
+.venv/
+
+# Misc
+coverage/
+.nyc_output/

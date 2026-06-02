@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Yubai Proxy Checker</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="panel">
+      <header class="header">
+        <div>
+          <div class="eyebrow">Yubai</div>
+          <h1>代理出口检测</h1>
+        </div>
+        <span id="statusBadge" class="badge badge--checking">检测中</span>
+      </header>
+
+      <section class="proxy-card">
+        <div>
+          <span class="proxy-card__label">浏览器代理</span>
+          <strong id="proxyStatusText">读取中</strong>
+        </div>
+        <p id="proxyDetailText">-</p>
+      </section>
+
+      <article class="provider-card">
+        <div class="provider-card__head">
+          <div>
+            <span id="providerIndex" class="provider-card__index">01</span>
+            <h2 id="providerTitle">ip-api.com</h2>
+          </div>
+          <span id="providerStatus" class="provider-status provider-status--checking">检测中</span>
+        </div>
+
+        <div id="resultFields" class="result"></div>
+        <p id="providerErrorText" class="error" hidden></p>
+      </article>
+
+      <div class="checked-at">
+        <span>检测时间</span>
+        <strong id="timeValue">-</strong>
+      </div>
+
+      <p id="errorText" class="error" hidden></p>
+
+      <div class="actions">
+        <button id="refreshButton" type="button">重新检测</button>
+        <button id="cloudflareButton" class="button-secondary" type="button" hidden>使用 Cloudflare 复查</button>
+      </div>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

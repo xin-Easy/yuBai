@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Yubai Proxy Manager",
+  "version": "0.4.0",
+  "description": "Sets the browser proxy and shows the current network egress result.",
+  "permissions": ["proxy", "storage", "webRequest", "webRequestAuthProvider"],
+  "host_permissions": [
+    "<all_urls>",
+    "http://ip-api.com/*",
+    "https://cloudflare.com/  *"
+  ],
+  "background": {
+    "service_worker": "service_worker.js",
+    "type": "classic"
+  },
+  "action": {
+    "default_title": "Proxy Checker",
+    "default_popup": "popup.html"
+  }
+}

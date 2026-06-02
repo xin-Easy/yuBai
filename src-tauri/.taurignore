@@ -1,0 +1,10 @@
+/target/
+/data/*.db
+/data/*.db-shm
+/data/*.db-wal
+/data/*.db-journal
+/data/*.log
+/data/profiles/
+/data/snapshots/
+/data/_proxy_bridge/
+/gen/schemas/

@@ -1,0 +1,24 @@
+database:
+  type: sqlite
+  sqlite:
+    path: data/app.db
+app:
+  name: yubai
+  max_profile_limit: 20
+browser:
+  user_data_root: data/profiles
+  default_fingerprint_args:
+    - --fingerprint-brand=Chrome
+    - --fingerprint-platform=windows
+  default_launch_args:
+    - --disable-sync
+    - --no-first-run
+  default_start_urls: []
+  proxy_mode: auto
+  restore_last_session: false
+  start_ready_timeout_ms: 3000
+  start_stable_window_ms: 1200
+automation:
+  node:
+    version: 24.16.0
+    download_source: auto
