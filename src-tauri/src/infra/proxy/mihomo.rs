@@ -12,6 +12,7 @@ use tempfile::NamedTempFile;
 use zip::ZipArchive;
 
 const RELEASE_API: &str = "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest";
+const GITHUB_ACCELERATOR_PREFIX: &str = "https://gh.yuhai.org/";
 
 #[derive(Debug, Deserialize)]
 struct Release {
@@ -73,29 +74,10 @@ fn download_latest_release(
     config: &Config,
 ) -> Result<(), AppError> {
     let client = client()?;
-    let prefer_mirror = download_source::prefer_mirror(Some(config));
-    let source_label = download_source::source_label(Some(config));
+    let prefer_mirror = prefer_mihomo_mirror(config);
+    let source_label = mihomo_source_label(config);
 
-    let release = client
-        .get(RELEASE_API)
-        .send()
-        .map_err(|err| {
-            AppError::other(format!(
-                "failed to request mihomo release metadata: {err}"
-            ))
-        })?
-        .error_for_status()
-        .map_err(|err| {
-            AppError::other(format!(
-                "mihomo release metadata request returned error: {err}"
-            ))
-        })?
-        .json::<Release>()
-        .map_err(|err| {
-            AppError::other(format!(
-                "failed to parse mihomo release metadata: {err}"
-            ))
-        })?;
+    let release = fetch_release_metadata(&client, prefer_mirror)?;
 
     let asset = select_asset(&release).ok_or_else(|| {
         AppError::not_found(format!(
@@ -144,12 +126,7 @@ fn download_asset(
     _source_label: &str,
 ) -> Result<(), AppError> {
     let mirror_urls = if prefer_mirror {
-        vec![
-            format!("https://ghproxy.net/{}", asset.browser_download_url),
-            asset
-                .browser_download_url
-                .replace( "https://kkgithub.com","https://github.com"),
-        ]
+        vec![accelerate_github_url(&asset.browser_download_url)]
     } else {
         vec![]
     };
@@ -157,20 +134,85 @@ fn download_asset(
     let mut last_err = None;
 
     for url in &mirror_urls {
-        match fetch_asset_bytes(client, url) {
-            Ok(bytes) => {
-                return install_asset(client, runtime_dir, binary_path, asset, bytes, url);
-            }
-            Err(e) => {
-                last_err = Some(e);
-            }
+        match fetch_asset_bytes(client, url)
+            .and_then(|bytes| install_asset(client, runtime_dir, binary_path, asset, bytes, url))
+        {
+            Ok(()) => return Ok(()),
+            Err(e) => last_err = Some(e),
         }
     }
 
     let official_url = &asset.browser_download_url;
-    match fetch_asset_bytes(client, official_url) {
-        Ok(bytes) => install_asset(client, runtime_dir, binary_path, asset, bytes, official_url),
+    match fetch_asset_bytes(client, official_url).and_then(|bytes| {
+        install_asset(client, runtime_dir, binary_path, asset, bytes, official_url)
+    }) {
+        Ok(()) => Ok(()),
         Err(e) => Err(last_err.unwrap_or(e)),
+    }
+}
+
+fn fetch_release_metadata(client: &Client, prefer_mirror: bool) -> Result<Release, AppError> {
+    let mut urls = Vec::new();
+    if prefer_mirror {
+        urls.push(accelerate_github_url(RELEASE_API));
+    }
+    urls.push(RELEASE_API.to_string());
+
+    let mut last_err = None;
+    for url in urls {
+        match client
+            .get(&url)
+            .send()
+            .map_err(|err| {
+                AppError::other(format!(
+                    "failed to request mihomo release metadata from {url}: {err}"
+                ))
+            })
+            .and_then(|resp| {
+                resp.error_for_status().map_err(|err| {
+                    AppError::other(format!(
+                        "mihomo release metadata request returned error from {url}: {err}"
+                    ))
+                })
+            })
+            .and_then(|resp| {
+                resp.json::<Release>().map_err(|err| {
+                    AppError::other(format!(
+                        "failed to parse mihomo release metadata from {url}: {err}"
+                    ))
+                })
+            }) {
+            Ok(release) => return Ok(release),
+            Err(err) => last_err = Some(err),
+        }
+    }
+
+    Err(last_err.unwrap_or_else(|| AppError::other("failed to request mihomo release metadata")))
+}
+
+fn accelerate_github_url(url: &str) -> String {
+    format!("{GITHUB_ACCELERATOR_PREFIX}{url}")
+}
+
+fn prefer_mihomo_mirror(config: &Config) -> bool {
+    match config
+        .browser
+        .mihomo_download_source
+        .trim()
+        .to_lowercase()
+        .as_str()
+    {
+        "official" => false,
+        "npmmirror" | "mirror" => true,
+        _ => download_source::prefer_mirror(Some(config)),
+    }
+}
+
+fn mihomo_source_label(config: &Config) -> &'static str {
+    if prefer_mihomo_mirror(config) {
+        "mirror"
+    } else {
+        "official"
     }
 }
 
@@ -195,8 +237,13 @@ fn install_asset(
     download_url: &str,
 ) -> Result<(), AppError> {
     if asset.name.ends_with(".zip") {
+        validate_zip_bytes(&bytes, download_url)?;
         let cursor = Cursor::new(bytes.to_vec());
-        let mut archive = ZipArchive::new(cursor)?;
+        let mut archive = ZipArchive::new(cursor).map_err(|err| {
+            AppError::other(format!(
+                "invalid mihomo zip archive from {download_url}: {err}"
+            ))
+        })?;
         extract_zip_binary(&mut archive, runtime_dir, binary_path)?;
     } else if asset.name.ends_with(".gz") {
         let mut decoder = GzDecoder::new(Cursor::new(bytes.to_vec()));
@@ -241,7 +288,7 @@ fn extract_zip_binary<R: Read + std::io::Seek>(
             .file_name()
             .map(|name| name.to_string_lossy().to_lowercase())
             .unwrap_or_default();
-        if file_name != "mihomo.exe" && file_name != "mihomo" {
+        if !is_mihomo_binary_name(&file_name) {
             continue;
         }
 
@@ -256,6 +303,26 @@ fn extract_zip_binary<R: Read + std::io::Seek>(
     Err(AppError::not_found(
         "mihomo binary not found in downloaded archive",
     ))
+}
+
+fn validate_zip_bytes(bytes: &[u8], download_url: &str) -> Result<(), AppError> {
+    if bytes.len() < 4 || &bytes[..4] != b"PK\x03\x04" {
+        let preview = String::from_utf8_lossy(&bytes[..bytes.len().min(120)])
+            .replace('\r', " ")
+            .replace('\n', " ");
+        return Err(AppError::other(format!(
+            "downloaded mihomo archive from {download_url} is not a zip file: {preview}"
+        )));
+    }
+    Ok(())
+}
+
+fn is_mihomo_binary_name(file_name: &str) -> bool {
+    if cfg!(target_os = "windows") {
+        file_name == "mihomo.exe" || file_name.starts_with("mihomo-") && file_name.ends_with(".exe")
+    } else {
+        file_name == "mihomo" || file_name.starts_with("mihomo-")
+    }
 }
 
 fn client() -> Result<Client, AppError> {

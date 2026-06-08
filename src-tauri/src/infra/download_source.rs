@@ -1,14 +1,6 @@
 use crate::domain::config::Config;
 use std::env;
 
-pub fn source_label(config: Option<&Config>) -> &'static str {
-    if prefer_mirror(config) {
-        "mirror"
-    } else {
-        "official"
-    }
-}
-
 pub fn prefer_mirror(config: Option<&Config>) -> bool {
     let source = config
         .map(|config| config.browser.download_source.trim().to_lowercase())

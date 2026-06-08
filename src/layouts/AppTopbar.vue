@@ -30,7 +30,7 @@ const subtitle = computed(() => {
 
 <template>
   <header class="topbar-shell">
-    <div class="topbar-copy">
+    <div class="topbar-copy" :title="`${title}\n${subtitle}`">
       <div class="topbar-title">{{ title }}</div>
       <div class="topbar-subtitle">{{ subtitle }}</div>
     </div>
@@ -58,7 +58,7 @@ const subtitle = computed(() => {
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: minmax(210px, auto) minmax(240px, 380px) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 360px) auto;
   align-items: center;
   gap: 16px;
   height: var(--app-chrome-height);
@@ -72,6 +72,7 @@ const subtitle = computed(() => {
 
 .topbar-copy {
   min-width: 0;
+  overflow: hidden;
 }
 
 .topbar-title {
@@ -92,6 +93,7 @@ const subtitle = computed(() => {
 }
 
 .topbar-search {
+  min-width: 0;
   width: 100%;
 }
 
@@ -104,12 +106,13 @@ const subtitle = computed(() => {
 .topbar-actions {
   display: flex;
   justify-content: flex-end;
+  flex-shrink: 0;
   gap: 8px;
 }
 
 @media (max-width: 1180px) {
   .topbar-shell {
-    grid-template-columns: minmax(170px, auto) minmax(200px, 300px) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 280px) auto;
     gap: 12px;
     padding: 0 16px;
   }

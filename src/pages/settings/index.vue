@@ -57,11 +57,8 @@ const automationRuntimeStatus = computed<{ label: string; type: 'success' | 'war
   if (!automationState.value.installed) {
     return { label: '未安装', type: 'info' }
   }
-  if (!automationState.value.enabled) {
-    return { label: '已安装，未启用', type: 'warning' }
-  }
-  if (automationState.value.ready) {
-    return { label: '可运行', type: 'success' }
+  if (automationState.value.playwrightVersion && automationState.value.nodeVersion) {
+    return { label: '已安装', type: 'success' }
   }
   return { label: '已安装，需自检', type: 'warning' }
 })
@@ -135,7 +132,6 @@ async function handleInstallRuntime() {
   automationInstalling.value = true
   runtimeProgress.value = { phase: 'preparing', message: '准备安装自动化运行环境', progress: 5 }
   try {
-    automationState.value = await saveAutomationSettings(automationState.value.enabled, automationState.value.headlessDefault)
     automationState.value = await installAutomationRuntime()
     ElMessage.success('自动化运行环境安装完成')
   } catch (error) {

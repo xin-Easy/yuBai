@@ -20,7 +20,7 @@ function isActive(path: string) {
   <aside class="sidebar-shell transition-all duration-200" :style="{ width: sidebarWidth }">
     <div class="sidebar-brand">
       <div class="sidebar-brand__logo">{{ projectConfig.shortName }}</div>
-      <div v-if="!layout.sidebarCollapsed" class="sidebar-brand__copy">
+      <div v-if="!layout.sidebarCollapsed" class="sidebar-brand__copy" :title="`${projectConfig.name}\n${projectConfig.description}`">
         <div class="sidebar-brand__title">{{ projectConfig.name }}</div>
         <div class="sidebar-brand__desc">{{ projectConfig.description }}</div>
       </div>

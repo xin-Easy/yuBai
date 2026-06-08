@@ -76,9 +76,19 @@ const scriptRuns = computed(() => {
 })
 const selectedProfile = computed(() => profiles.value.find((item) => item.profileId === selectedProfileId.value))
 const runtimeStatus = computed(() => {
-  if (state.value.ready) return { label: '已就绪', type: 'success' as const }
   if (state.value.installing) return { label: '安装中', type: 'warning' as const }
-  return { label: '未就绪', type: 'info' as const }
+  if (!state.value.installed) return { label: '未安装', type: 'info' as const }
+  if (!state.value.enabled) return { label: '已安装，未启用', type: 'warning' as const }
+  if (state.value.ready) return { label: '已就绪', type: 'success' as const }
+  return { label: '已安装，需自检', type: 'warning' as const }
+})
+
+const runtimeStatusText = computed(() => {
+  if (state.value.lastError) return state.value.lastError
+  if (!state.value.installed) return '请先准备本地运行时'
+  if (!state.value.enabled) return '启用后即可提交脚本运行'
+  if (state.value.ready) return '本地自动化执行环境可用'
+  return '请自检 Node / Playwright 依赖'
 })
 
 const runStatusMap: Record<AutomationRun['status'], { label: string; type: 'success' | 'warning' | 'danger' | 'info' }> = {
@@ -534,7 +544,7 @@ usePageRefresh(loadAutomation)
         <div class="mt-3">
           <el-tag :type="runtimeStatus.type" effect="plain">{{ runtimeStatus.label }}</el-tag>
         </div>
-        <div class="metric-card__text">{{ state.lastError || '后端自动化执行环境' }}</div>
+        <div class="metric-card__text">{{ runtimeStatusText }}</div>
       </div>
       <div class="metric-card">
         <div class="metric-card__label">脚本数量</div>

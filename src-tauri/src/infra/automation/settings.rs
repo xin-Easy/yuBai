@@ -13,17 +13,18 @@ pub fn state_get(state: &AppState) -> Result<AutomationRuntimeState, AppError> {
     let config = state.config_snapshot().map_err(AppError::from)?;
     let settings = read_settings(&paths)?;
     let check = self_check(state)?;
+    let installed = paths.runner.is_file() && runtime::bundled_node_paths(&paths, &config)?.is_some();
     Ok(AutomationRuntimeState {
         enabled: settings.enabled,
         runtime_version: runtime::runtime_version_label(&config),
         headless_default: settings.headless_default,
-        installed: paths.runner.is_file() && runtime::bundled_node_paths(&paths, &config)?.is_some(),
-        ready: settings.enabled && check.ok,
+        installed,
+        ready: installed && settings.enabled && check.ok,
         installing: false,
-        last_error: if settings.enabled {
+        last_error: if installed && !check.ok {
             check.error
         } else {
-            "automation runtime is disabled".to_string()
+            String::new()
         },
         node_version: check.node_version,
         playwright_version: check.playwright_version,

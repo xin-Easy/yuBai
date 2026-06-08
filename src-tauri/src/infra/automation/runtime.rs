@@ -8,7 +8,7 @@ use chrono::Utc;
 use reqwest::blocking::Client;
 use std::{
     fs::{self, File},
-    io,
+    io::{self, Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     process::Command,
     time::Duration,
@@ -223,7 +223,8 @@ fn ensure_bundled_node_with_events(
     if let Some(app) = app {
         emit_runtime_progress(app, "downloading_node", "Downloading bundled Node.js", 25);
     }
-    download_node_archive(&package.url, &package.archive_path)?;
+    let download_urls = node_download_urls(&package.url);
+    download_node_archive(&download_urls, &package.archive_path)?;
     if let Some(app) = app {
         emit_runtime_progress(app, "extracting_node", "Extracting bundled Node.js", 45);
     }
@@ -235,6 +236,17 @@ fn ensure_bundled_node_with_events(
             package.executable_path.to_string_lossy()
         )));
     }
+    let npm_path = resolve_installed_npm_path(&package.version_dir).ok_or_else(|| {
+        AppError::other(format!(
+            "npm executable not found after extract: {}",
+            package.version_dir.to_string_lossy()
+        ))
+    })?;
+    let package = NodePackage {
+        npm_path,
+        ..package
+    };
+
     if !package.npm_path.is_file() {
         return Err(AppError::other(format!(
             "npm executable not found after extract: {}",
@@ -309,26 +321,72 @@ fn node_download_base_url(config: &Config) -> &'static str {
     }
 }
 
+fn node_download_urls(primary_url: &str) -> Vec<String> {
+    let mut urls = vec![primary_url.to_string()];
+    let fallback_url = if primary_url.starts_with(NODE_NPMMIRROR_DIST_BASE) {
+        Some(primary_url.replacen(NODE_NPMMIRROR_DIST_BASE, NODE_OFFICIAL_DIST_BASE, 1))
+    } else if primary_url.starts_with(NODE_OFFICIAL_DIST_BASE) {
+        Some(primary_url.replacen(NODE_OFFICIAL_DIST_BASE, NODE_NPMMIRROR_DIST_BASE, 1))
+    } else {
+        None
+    };
+
+    if let Some(fallback_url) = fallback_url {
+        if fallback_url != primary_url {
+            urls.push(fallback_url);
+        }
+    }
+    urls
+}
+
 fn normalize_node_version(version: &str) -> String {
     version.trim().trim_start_matches('v').to_string()
 }
 
 fn resolve_npm_path(version_dir: &Path) -> PathBuf {
-    let direct = if cfg!(target_os = "windows") {
-        version_dir.join("npm.cmd")
-    } else {
-        version_dir.join("bin").join("npm")
-    };
-    if direct.is_file() {
-        return direct;
-    }
+    resolve_installed_npm_path(version_dir).unwrap_or_else(|| {
+        if cfg!(target_os = "windows") {
+            version_dir.join("npm.cmd")
+        } else {
+            version_dir.join("bin").join("npm")
+        }
+    })
+}
 
-    version_dir
+fn resolve_installed_npm_path(version_dir: &Path) -> Option<PathBuf> {
+    let npm_bin_dir = version_dir
+        .join("node_modules")
+        .join("npm")
+        .join("bin");
+    let lib_npm_bin_dir = version_dir
         .join("lib")
         .join("node_modules")
         .join("npm")
-        .join("bin")
-        .join("npm-cli.js")
+        .join("bin");
+    let search_dirs = if cfg!(target_os = "windows") {
+        vec![version_dir.to_path_buf(), npm_bin_dir.clone()]
+    } else {
+        vec![version_dir.join("bin"), lib_npm_bin_dir.clone(), npm_bin_dir.clone()]
+    };
+
+    let paths = std::env::join_paths(search_dirs.iter()).ok()?;
+    let binary_names = if cfg!(target_os = "windows") {
+        ["npm.cmd", "npm.exe", "npm"]
+    } else {
+        ["npm", "npm-cli.js", "npm.cmd"]
+    };
+
+    binary_names
+        .iter()
+        .find_map(|name| which::which_in(name, Some(&paths), version_dir).ok())
+        .or_else(|| {
+            [
+                npm_bin_dir.join("npm-cli.js"),
+                lib_npm_bin_dir.join("npm-cli.js"),
+            ]
+            .into_iter()
+            .find(|path| path.is_file())
+        })
 }
 
 fn node_platform() -> Result<&'static str, AppError> {
@@ -361,22 +419,57 @@ fn node_platform() -> Result<&'static str, AppError> {
     }
 }
 
-fn download_node_archive(url: &str, target: &Path) -> Result<(), AppError> {
+fn download_node_archive(urls: &[String], target: &Path) -> Result<(), AppError> {
     if target.is_file() {
-        return Ok(());
+        match validate_node_archive(target) {
+            Ok(()) => return Ok(()),
+            Err(_) => {
+                let _ = fs::remove_file(target);
+            }
+        }
     }
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent)?;
     }
+
     let client = Client::builder()
         .timeout(Duration::from_secs(600))
         .build()?;
+    let temp_path = target.with_file_name(format!(
+        "{}.download",
+        target
+            .file_name()
+            .map(|name| name.to_string_lossy())
+            .unwrap_or_default()
+    ));
+    let mut last_err = None;
+
+    for url in urls {
+        let _ = fs::remove_file(&temp_path);
+        match download_node_archive_from(&client, url, &temp_path)
+            .and_then(|_| validate_node_archive(&temp_path))
+        {
+            Ok(()) => {
+                fs::rename(&temp_path, target)?;
+                return Ok(());
+            }
+            Err(err) => {
+                let _ = fs::remove_file(&temp_path);
+                last_err = Some(err);
+            }
+        }
+    }
+
+    Err(last_err.unwrap_or_else(|| AppError::other("Node download failed")))
+}
+
+fn download_node_archive_from(client: &Client, url: &str, target: &Path) -> Result<(), AppError> {
     let mut response = client
         .get(url)
         .send()
-        .map_err(|err| AppError::other(format!("Node download failed: {err}")))?
+        .map_err(|err| AppError::other(format!("Node download failed from {url}: {err}")))?
         .error_for_status()
-        .map_err(|err| AppError::other(format!("Node download returned error: {err}")))?;
+        .map_err(|err| AppError::other(format!("Node download returned error from {url}: {err}")))?;
     let mut file = File::create(target)?;
     io::copy(&mut response, &mut file)?;
     Ok(())
@@ -385,7 +478,12 @@ fn download_node_archive(url: &str, target: &Path) -> Result<(), AppError> {
 fn extract_node_archive(archive_path: &Path, target_dir: &Path) -> Result<(), AppError> {
     if archive_path.extension().and_then(|value| value.to_str()) == Some("zip") {
         let file = File::open(archive_path)?;
-        let mut archive = ZipArchive::new(file)?;
+        let mut archive = ZipArchive::new(file).map_err(|err| {
+            AppError::other(format!(
+                "invalid Node zip archive {}: {err}",
+                archive_path.to_string_lossy()
+            ))
+        })?;
         crate::infra::archive::extract_zip_safely(&mut archive, target_dir)?;
         return Ok(());
     }
@@ -397,6 +495,51 @@ fn extract_node_archive(archive_path: &Path, target_dir: &Path) -> Result<(), Ap
         .unpack(target_dir)
         .map_err(|err| AppError::other(format!("failed to extract Node archive: {err}")))?;
     Ok(())
+}
+
+fn validate_node_archive(archive_path: &Path) -> Result<(), AppError> {
+    let mut file = File::open(archive_path)?;
+    let mut header = [0u8; 6];
+    let read = file.read(&mut header)?;
+    file.seek(SeekFrom::Start(0))?;
+
+    if archive_path.extension().and_then(|value| value.to_str()) == Some("zip") {
+        if read < 4 || &header[..4] != b"PK\x03\x04" {
+            return Err(AppError::other(format!(
+                "downloaded Node archive is not a zip file: {}",
+                archive_preview(archive_path)?
+            )));
+        }
+        ZipArchive::new(file).map(|_| ()).map_err(|err| {
+            AppError::other(format!(
+                "invalid Node zip archive {}: {err}",
+                archive_path.to_string_lossy()
+            ))
+        })?;
+    } else if archive_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.ends_with(".tar.xz"))
+        .unwrap_or(false)
+    {
+        if read < 6 || header != [0xfd, b'7', b'z', b'X', b'Z', 0x00] {
+            return Err(AppError::other(format!(
+                "downloaded Node archive is not an xz file: {}",
+                archive_preview(archive_path)?
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+fn archive_preview(path: &Path) -> Result<String, AppError> {
+    let mut file = File::open(path)?;
+    let mut bytes = [0u8; 120];
+    let read = file.read(&mut bytes)?;
+    Ok(String::from_utf8_lossy(&bytes[..read])
+        .replace('\r', " ")
+        .replace('\n', " "))
 }
 
 fn write_node_manifest(paths: &AutomationPaths, package: &NodePackage) -> Result<(), AppError> {
